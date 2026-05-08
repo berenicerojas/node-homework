@@ -1,3 +1,7 @@
+global.user_id = null;
+global.users = [];
+global.tasks = [];
+
 const express = require("express");
 const app = express();
 app.use(express.json());
@@ -13,5 +17,6 @@ const userRouter = require("./routers/userRoutes"); // Your existing user router
 
 app.use("/api/users", userRouter); // Unprotected
 app.use("/api/tasks", authMiddleware, taskRouter); // Protected!
+
 
 module.exports = app;
