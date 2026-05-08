@@ -4,18 +4,19 @@ global.tasks = [];
 
 const express = require("express");
 const app = express();
+app.use(express.json());
 
-app.use(express.json({ limit : "1kb"}));
+// Global data stores (as per assignment)
+global.users = [];
+global.tasks = [];
+global.user_id = null;
 
-const userRouter = require ("./routes/userRoutes");
-app.use("/api/users", userRouter);
+const authMiddleware = require("./middleware/auth");
+const taskRouter = require("./routers/taskRoutes");
+const userRouter = require("./routers/userRoutes"); // Your existing user router
 
-app.use((req, res) => {
-    res.status(404).json({ message : "Route not found"});
-});
+app.use("/api/users", userRouter); // Unprotected
+app.use("/api/tasks", authMiddleware, taskRouter); // Protected!
 
-if (process.env.NODE_ENV !== 'test'){
-    app.listen(3000, () => console.log("Main App Listening on port 3000"));
-}
 
 module.exports = app;
