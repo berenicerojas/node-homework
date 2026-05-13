@@ -3,7 +3,6 @@ SELECT c.customer_name, AVG(t.total_price) AS average_order_price FROM customers
 SELECT customer_id FROM customers WHERE customer_name = 'Perez and Sons';
 SELECT employee_id FROM employees WHERE first_name = 'Miranda' AND last_name = 'Harris';
 SELECT product_id FROM products ORDER BY price ASC LIMIT 5;
-SELECT product_id FROM products ORDER BY price ASC LIMIT 5;
 BEGIN;
 INSERT INTO orders (customer_id, employee_id, date) VALUES (16, 7, '2026-05-12') RETURNING order_id;
 INSERT INTO line_items (order_id, product_id, quantity) VALUES (83, 13, 10), (83, 15, 10), (83, 19, 10), (83, 22, 10), (83, 45, 10);
