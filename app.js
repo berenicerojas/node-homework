@@ -1,22 +1,62 @@
-global.user_id = null;
-global.users = [];
-global.tasks = [];
-
 const express = require("express");
+const pool = require("./db/pg-pool");
+const authMiddleware = require("./middleware/auth");
+const taskRouter = require("./routers/taskRoutes");
+const userRouter = require("./routers/userRoutes");
+
+console.log("--- STARTUP DEBUG ---");
+console.log("userRouter:", userRouter);
+console.log("taskRouter:", taskRouter);
+console.log("authMiddleware:", typeof authMiddleware);
+console.log("--- END STARTUP DEBUG ---");
+
 const app = express();
 app.use(express.json());
 
-// Global data stores (as per assignment)
-global.users = [];
-global.tasks = [];
 global.user_id = null;
 
-const authMiddleware = require("./middleware/auth");
-const taskRouter = require("./routers/taskRoutes");
-const userRouter = require("./routers/userRoutes"); // Your existing user router
+app.use("/api/users", userRouter); 
+app.use("/api/tasks", authMiddleware, taskRouter);
 
-app.use("/api/users", userRouter); // Unprotected
-app.use("/api/tasks", authMiddleware, taskRouter); // Protected!
+app.get("/health", async (req, res) => {  
+  try {    
+    await pool.query("SELECT 1");    
+    res.json({ status: "ok", db: "connected" });  
+  } catch (err) {    
+    res.status(500).json({ message: `db not connected, error: ${err.message}` });  
+  }
+});
 
+app.get("/api/debug-user", (req, res) => {
+  res.json({ 
+    current_global_user_id: global.user_id,
+    type: typeof global.user_id,
+    total_tasks_stored: global.tasks ? global.tasks.length : 0,
+    all_raw_tasks: global.tasks || []
+  });
+});
+
+app.use((err, req, res, next) => {
+  if (err.code === "ECONNREFUSED" && err.port === 5432) {
+    console.log("The database connection was refused. Is your database service running?");
+  }
+  
+  const status = err.status || 500;
+  res.status(status).json({ message: err.message || "Internal Server Error" });
+});
+
+const shutdown = async () => {
+  console.log("Shutting down server...");
+  await pool.end(); 
+  process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is officially running on port ${PORT}!`);
+});
 
 module.exports = app;
