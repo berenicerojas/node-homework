@@ -25,7 +25,12 @@ SELECT employee_id FROM employees WHERE first_name = 'Miranda' AND last_name = '
 SELECT product_id FROM products ORDER BY price ASC LIMIT 5;
 
 BEGIN;
--- The test harness handles the dynamic values and returning order_id here
+-- Insert the new order and return the new ID
+INSERT INTO orders (customer_id, employee_id, date) 
+VALUES ($1, $2, '2026-05-13') 
+RETURNING order_id;
+
+-- Insert the line items using the placeholder for that returned ID
 INSERT INTO line_items (order_id, product_id, quantity) 
 VALUES 
   ($1, 13, 10),
