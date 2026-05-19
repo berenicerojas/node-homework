@@ -4,6 +4,11 @@ const index = async (req, res, next) => {
   try {
     const tasks = await prisma.task.findMany({
       where: { userId: global.user_id },
+      select: {
+        id: true,
+        title: true,
+        isCompleted: true
+      }
     });
     if (!tasks || tasks.length === 0) return res.status(404).json({ message: "No tasks found" });
     return res.status(200).json(tasks);
@@ -21,6 +26,12 @@ const create = async (req, res, next) => {
         userId: global.user_id,
         isCompleted: req.body.isCompleted || false
       },
+
+      select: {
+        id: true,
+        title: true,
+        isCompleted: true
+      }
     });
     return res.status(201).json(newTask);
   } catch (err) {
@@ -37,6 +48,12 @@ const show = async (req, res, next) => {
           userId: global.user_id,
         },
       },
+
+      select: {
+        id: true,
+        title: true,
+        isCompleted: true
+      }
     });
     if (!task) return res.status(404).json({ message: "Task not found" });
     return res.status(200).json(task);
@@ -48,6 +65,7 @@ const show = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const taskId = parseInt(req.params.id);
+
     const updatedTask = await prisma.task.update({
       where: { 
         id_userId: {
@@ -56,6 +74,11 @@ const update = async (req, res, next) => {
         }
       },
       data: req.body,
+      select: {
+        id: true,
+        title: true,
+        isCompleted: true
+      }
     });
     
     return res.status(200).json(updatedTask);

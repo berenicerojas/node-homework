@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require("../db/prisma"); 
 const crypto = require('crypto');
 const { userSchema } = require('../models/tasks'); 
 
@@ -29,7 +28,7 @@ const verifyPassword = (password, storedHash) => {
   });
 };
 
-const register = async (req, res) => {
+const register = async (req, res, next) => { 
   try {
     const { error, value } = userSchema.validate(req.body); 
     
@@ -45,23 +44,27 @@ const register = async (req, res) => {
         hashedPassword: hashedPassword, 
         name: value.name,
       },
+    
+      select: {
+        id: true,
+        name: true,
+        email: true
+      }
     });
 
-
-    newUser.password = value.password;
+    global.user_id = newUser.id; 
 
     return res.status(201).json(newUser);
 
   } catch (err) {
-    
     if (err.code === 'P2002') {
       return res.status(400).json({ error: "Email already exists" });
     }
-    return res.status(400).json({ error: err.message });
+    next(err);
   }
 };
 
-const logon = async (req, res) => {
+const logon = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     
@@ -80,12 +83,15 @@ const logon = async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     
-    user.password = password;
     global.user_id = user.id;
     
-    return res.status(200).json(user);
+    return res.status(200).json({
+      id: user.id,
+      name: user.name,
+      email: user.email
+    });
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    next(err);
   }
 };
 
