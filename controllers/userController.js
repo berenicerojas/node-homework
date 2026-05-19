@@ -1,91 +1,68 @@
-const prisma = require("../db/prisma");
-const crypto = require("crypto");
-const { userSchema } = require("../validation/userSchema");
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const { userSchema } = require('../models/tasks'); 
 
-const hashPassword = (password) => {
-  return new Promise((resolve, reject) => {
-    const salt = crypto.randomBytes(16).toString("hex");
-    crypto.scrypt(password, salt, 64, (err, derivedKey) => {
-      if (err) reject(err);
-      resolve(`${salt}:${derivedKey.toString("hex")}`);
-    });
-  });
-};
-
-const comparePassword = (password, hash) => {
-  return new Promise((resolve, reject) => {
-    const [salt, key] = hash.split(":");
-    crypto.scrypt(password, salt, 64, (err, derivedKey) => {
-      if (err) reject(err);
-      resolve(key === derivedKey.toString("hex"));
-    });
-  });
-};
-
-const logon = async (req, res, next) => {
-  let { email, password } = req.body; 
-  
+const register = async (req, res) => {
   try {
-    email = email.toLowerCase();
-
-    const user = await prisma.user.findUnique({
-      where: { email: email },
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: "Authentication failed. User not found." });
+    const { error, value } = userSchema.validate(req.body); 
+    
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
     }
 
-    const isMatch = await comparePassword(password, user.hashedPassword);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Authentication failed. Incorrect password." });
-    }
-
-    global.user_id = user.id;
-    return res.status(200).json({ message: "Logon successful", name: user.name });
-  } catch (err) {
-    if (typeof next === "function") return next(err);
-    return res.status(500).json({ message: err.message });
-  }
-};
-
-const register = async (req, res, next) => {
-  const { error, value } = userSchema.validate(req.body, { abortEarly: false });
-  if (error) {
-    return res.status(400).json({
-      message: "Validation failed",
-      details: error.details,
+    const existingUser = await prisma.user.findUnique({
+      where: { email: value.email },
     });
-  }
-  try {
-    const hashedPassword = await hashPassword(value.password);
-  
-    value.hashedPassword = hashedPassword;
-    delete value.password; 
+    
+    if (existingUser) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
 
     const newUser = await prisma.user.create({
       data: {
         email: value.email,
+        hashedPassword: value.password, 
         name: value.name,
-        hashedPassword: value.hashedPassword,
       },
-      select: { name: true, email: true, id: true }
     });
 
-    global.user_id = newUser.id;
-    return res.status(201).json({ name: newUser.name, email: newUser.email });
-  } catch (e) {
-    if (e.name === "PrismaClientKnownRequestError" && e.code === "P2002") {
-      return res.status(400).json({ message: "Email is already registered" });
-    }
-    if (typeof next === "function") return next(e);
-    return res.status(500).json({ message: e.message });
+    newUser.password = value.password;
+
+    return res.status(201).json(newUser);
+
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 };
 
-const logoff = (req, res) => {
-  global.user_id = null;
-  return res.status(200).json({ message: "Logoff successful" });
+const logon = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+
+    if (!user || user.hashedPassword !== password) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    
+  
+    user.password = password;
+    global.user_id = user.id;
+    
+    return res.status(200).json(user);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 };
 
-module.exports = { logon, register, logoff };
+const logoff = async (req, res) => {
+  global.user_id = null;
+  return res.status(200).json({ message: "Logged out successfully" });
+};
+
+module.exports = { register, logon, logoff };

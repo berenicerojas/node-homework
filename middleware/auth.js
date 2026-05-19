@@ -1,8 +1,6 @@
-const authMiddleware = (req, res, next) => {
+module.exports = (req, res, next) => {
   if (!global.user_id) {
-    return res.status(401).json({ message: "unauthorized" });
+    return res.status(401).json({ message: "Unauthorized: Please log in first" });
   }
   next();
 };
-
-module.exports = authMiddleware;
