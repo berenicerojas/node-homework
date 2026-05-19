@@ -30,8 +30,13 @@ const create = async (req, res, next) => {
 
 const show = async (req, res, next) => {
   try {
-    const task = await prisma.task.findFirst({
-      where: { id: parseInt(req.params.id), userId: global.user_id },
+    const task = await prisma.task.findUnique({
+      where: {
+        id_userId: {
+          id: parseInt(req.params.id),
+          userId: global.user_id,
+        },
+      },
     });
     if (!task) return res.status(404).json({ message: "Task not found" });
     return res.status(200).json(task);
@@ -43,18 +48,21 @@ const show = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const taskId = parseInt(req.params.id);
-    const task = await prisma.task.findUnique({ where: { id: taskId } });
-    
-    if (!task || task.userId !== global.user_id) {
-      return res.status(404).json({ message: "Unauthorized or not found" });
-    }
-
     const updatedTask = await prisma.task.update({
-      where: { id: taskId },
+      where: { 
+        id_userId: {
+          id: taskId,
+          userId: global.user_id
+        }
+      },
       data: req.body,
     });
+    
     return res.status(200).json(updatedTask);
   } catch (err) {
+    if (err.code === 'P2025') {
+      return res.status(404).json({ message: "Unauthorized or not found" });
+    }
     next(err);
   }
 };
@@ -62,15 +70,21 @@ const update = async (req, res, next) => {
 const deleteTask = async (req, res, next) => {
   try {
     const taskId = parseInt(req.params.id);
-    const task = await prisma.task.findUnique({ where: { id: taskId } });
 
-    if (!task || task.userId !== global.user_id) {
-      return res.status(404).json({ message: "Unauthorized or not found" });
-    }
+    await prisma.task.delete({
+      where: {
+        id_userId: {
+          id: taskId,
+          userId: global.user_id
+        }
+      },
+    });
 
-    await prisma.task.delete({ where: { id: taskId } });
     return res.status(200).json({ message: "Deleted" });
   } catch (err) {
+    if (err.code === 'P2025') {
+      return res.status(404).json({ message: "Unauthorized or not found" });
+    }
     next(err);
   }
 };

@@ -8,16 +8,24 @@ datasource db {
 }
 
 model User {
-  id    Int    @id @default(autoincrement())
-  email String @unique
-  name  String
-  tasks Task[]
+  id             Int      @id @default(autoincrement())
+  email          String   @unique
+  name           String
+  hashedPassword String   @map("hashed_password")
+  createdAt      DateTime @default(now()) @map("created_at")
+  tasks          Task[]
+
+  @@map("users")
 }
 
 model Task {
-  id          Int     @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   title       String
-  isCompleted Boolean @default(false)
-  userId      Int
-  user        User    @relation(fields: [userId], references: [id])
+  isCompleted Boolean  @default(false) @map("is_completed")
+  userId      Int      @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([id, userId])
+  @@map("tasks")
 }
