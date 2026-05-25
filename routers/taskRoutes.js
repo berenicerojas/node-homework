@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const taskController = require("../controllers/taskController"); 
-const authMiddleware = require("../middleware/auth"); // Adjust this path to where your auth.js is stored!
+const taskController = require("../controllers/taskController");
 
-router.post("/", authMiddleware, taskController.create);
-router.get("/", authMiddleware, taskController.index);
-router.get("/:id", authMiddleware, taskController.show);
-router.patch("/:id", authMiddleware, taskController.update);
-router.delete("/:id", authMiddleware, taskController.deleteTask);
+router.get("/", taskController.index);
+router.post("/", taskController.create); 
+router.post("/bulk", taskController.bulkCreate); 
+router.get("/:id", taskController.show);
+router.patch("/:id", taskController.update);
+router.delete("/:id", taskController.deleteTask); 
 
 module.exports = router;

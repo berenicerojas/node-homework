@@ -21,11 +21,9 @@ model User {
 model Task {
   id          Int      @id @default(autoincrement())
   title       String
-  isCompleted Boolean  @default(false) @map("is_completed")
-  userId      Int      @map("user_id")
-  createdAt   DateTime @default(now()) @map("created_at")
+  isCompleted Boolean  @default(false)
+  priority    String   @default("medium")
+  userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([id, userId])
-  @@map("tasks")
+  createdAt   DateTime @default(now())
 }
