@@ -111,18 +111,31 @@ exports.searchTasks = async (req, res, next) => {
     let results;
     try {
       results = await prisma.$queryRawUnsafe(
-        `SELECT id, title, priority, "isCompleted" FROM "Task" WHERE "userId" = $1 AND title ILIKE $2`,
+        `SELECT t.id, t.title, t.priority, t."isCompleted", u.name AS user_name 
+         FROM "Task" t 
+         INNER JOIN "User" u ON t."userId" = u.id 
+         WHERE t."userId" = $1 AND t.title ILIKE $2`,
         global.user_id,
         `%${q}%`
       );
     } catch (sqlError) {
-      results = await prisma.task.findMany({
+      const fallbackData = await prisma.task.findMany({
         where: {
           userId: global.user_id,
           title: { contains: q, mode: 'insensitive' }
         },
-        select: { id: true, title: true, priority: true, isCompleted: true }
+        include: {
+          user: { select: { name: true } }
+        }
       });
+      
+      results = fallbackData.map(t => ({
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        isCompleted: t.isCompleted,
+        user_name: t.user?.name || null
+      }));
     }
 
     res.status(200).json({
