@@ -4,6 +4,17 @@ exports.getUserAnalytics = async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id) || global.user_id;
 
+    const userExists = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!userExists) {
+      return res.status(404).json({ message: "The user was not found." });
+    }
+
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
     const taskStats = await prisma.task.groupBy({
       by: ['isCompleted'],
       where: { userId: userId },
@@ -16,10 +27,21 @@ exports.getUserAnalytics = async (req, res, next) => {
       take: 3
     });
 
+    const weeklyTasksGrouped = await prisma.task.groupBy({
+      by: ['createdAt'],
+      where: {
+        userId: userId,
+        createdAt: {
+          gte: oneWeekAgo
+        }
+      },
+      _count: { id: true }
+    });
+
     res.status(200).json({
       taskStats: taskStats || [],
       recentTasks: recentTasks || [],
-      weeklyProgress: []
+      weeklyProgress: weeklyTasksGrouped || []
     });
   } catch (err) {
     next(err);
@@ -35,7 +57,11 @@ exports.getUsersWithStats = async (req, res, next) => {
     const dbUsers = await prisma.user.findMany({
       skip: skip,
       take: limit,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
         _count: {
           select: { tasks: true }
         }
@@ -45,7 +71,10 @@ exports.getUsersWithStats = async (req, res, next) => {
     const users = dbUsers.map(user => {
       if (user._count) {
         return {
-          ...user,
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          createdAt: user.createdAt,
           _count: {
             Task: user._count.tasks
           }
@@ -62,7 +91,9 @@ exports.getUsersWithStats = async (req, res, next) => {
         page,
         limit,
         total: totalUsers,
-        pages: Math.ceil(totalUsers / limit)
+        pages: Math.ceil(totalUsers / limit),
+        hasNext: page * limit < totalUsers, 
+        hasPrev: page > 1                   
       }
     });
   } catch (err) {
