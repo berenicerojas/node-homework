@@ -1,6 +1,9 @@
 const prisma = require("../db/prisma");
 const bcrypt = require("bcrypt");
 const Joi = require("joi");
+const { randomUUID } = require("crypto");
+const jwt = require("jsonwebtoken");
+const { StatusCodes } = require("http-status-codes");
 
 const userSchema = Joi.object({
   name: Joi.string().max(255).required(),
@@ -8,10 +11,26 @@ const userSchema = Joi.object({
   password: Joi.string().min(6).required(),
 });
 
+const cookieFlags = (req) => {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", 
+    sameSite: "Strict",
+  };
+};
+
+const setJwtCookie = (req, res, user) => {
+  const payload = { id: user.id, csrfToken: randomUUID() };
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" }); 
+  
+  res.cookie("jwt", token, { ...cookieFlags(req), maxAge: 3600000 }); 
+  return payload.csrfToken; 
+};
+
 exports.register = async (req, res, next) => {
   try {
     const { error, value } = userSchema.validate(req.body);
-    if (error) return res.status(400).json({ error: error.details[0].message });
+    if (error) return res.status(StatusCodes.BAD_REQUEST).json({ error: error.details[0].message });
 
     const hashedPassword = await bcrypt.hash(value.password, 10);
 
@@ -44,17 +63,19 @@ exports.register = async (req, res, next) => {
       return { user: newUser, welcomeTasks };
     });
 
-    global.user_id = result.user.id;
+    const csrfToken = setJwtCookie(req, res, result.user);
 
-    res.status(201).json({
+    res.status(StatusCodes.CREATED).json({
       name: result.user.name,
+      email: result.user.email,
+      csrfToken: csrfToken,
       user: result.user,
       welcomeTasks: result.welcomeTasks,
       transactionStatus: "success",
     });
   } catch (err) {
     if (err.code === "P2002") {
-      return res.status(400).json({ error: "Email already registered" });
+      return res.status(StatusCodes.BAD_REQUEST).json({ error: "Email already registered" });
     }
     next(err);
   }
@@ -65,15 +86,15 @@ exports.logon = async (req, res, next) => {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.hashedPassword))) {
-      return res.status(401).json({ error: "Invalid email or password" });
+      return res.status(StatusCodes.UNAUTHORIZED).json({ error: "Invalid email or password" });
     }
 
-    global.user_id = user.id;
+    const csrfToken = setJwtCookie(req, res, user);
 
-    res.status(200).json({ 
-      message: "Logon successful", 
+    res.status(StatusCodes.OK).json({ 
       name: user.name, 
-      user: { id: user.id, name: user.name, email: user.email } 
+      email: user.email,
+      csrfToken: csrfToken
     });
   } catch (err) {
     next(err);
@@ -81,6 +102,6 @@ exports.logon = async (req, res, next) => {
 };
 
 exports.logoff = async (req, res, next) => {
-  global.user_id = null;
-  res.status(200).json({ message: "Logged off successfully" });
+  res.clearCookie("jwt", cookieFlags(req));
+  res.status(StatusCodes.OK).json({ message: "Successfully logged off." });
 };

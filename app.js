@@ -3,12 +3,27 @@ const prisma = require("./db/prisma");
 const userRouter = require("./routers/userRoutes");
 const taskRouter = require("./routers/taskRoutes");
 const analyticsRouter = require("./routers/analyticsRoutes");
-const authMiddleware = require("./middleware/auth");
 
 const app = express();
+
+app.set("trust proxy", 1);
+const rateLimiter = require("express-rate-limit");
+app.use(
+  rateLimiter({
+    windowMs: 15 * 60 * 1000, 
+    max: 100, 
+  }),
+);
+
+const helmet = require("helmet");
+app.use(helmet());
+
+const cookieParser = require("cookie-parser");
+app.use(cookieParser());
 app.use(express.json());
 
-global.user_id = null;
+const { xss } = require("express-xss-sanitizer");
+app.use(xss());
 
 app.get("/health", async (req, res) => {
   try {
@@ -20,8 +35,8 @@ app.get("/health", async (req, res) => {
 });
 
 app.use("/api/users", userRouter);
-app.use("/api/tasks", authMiddleware, taskRouter);
-app.use("/api/analytics", authMiddleware, analyticsRouter);
+app.use("/api/tasks", taskRouter);
+app.use("/api/analytics", analyticsRouter);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -48,4 +63,4 @@ const gracefulShutdown = async () => {
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
 
-module.exports = app;
+module.exports = { app, server };

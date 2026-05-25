@@ -2,7 +2,8 @@ const prisma = require("../db/prisma");
 
 exports.getUserAnalytics = async (req, res, next) => {
   try {
-    const userId = parseInt(req.params.id) || global.user_id;
+  
+    const userId = req.user.id;
 
     const userExists = await prisma.user.findUnique({
       where: { id: userId }
@@ -108,20 +109,22 @@ exports.searchTasks = async (req, res, next) => {
       return res.status(400).json({ error: "Search query must be at least 3 characters long" });
     }
 
+    const userId = req.user.id;
     let results;
+
     try {
       results = await prisma.$queryRawUnsafe(
         `SELECT t.id, t.title, t.priority, t."isCompleted", u.name AS user_name 
          FROM "Task" t 
          INNER JOIN "User" u ON t."userId" = u.id 
          WHERE t."userId" = $1 AND t.title ILIKE $2`,
-        global.user_id,
+        userId,
         `%${q}%`
       );
     } catch (sqlError) {
       const fallbackData = await prisma.task.findMany({
         where: {
-          userId: global.user_id,
+          userId: userId,
           title: { contains: q, mode: 'insensitive' }
         },
         include: {
