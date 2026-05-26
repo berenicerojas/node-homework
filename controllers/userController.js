@@ -12,12 +12,19 @@ const userSchema = Joi.object({
 });
 
 const cookieFlags = (req) => {
-  return {
+  const flags = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production", 
-    sameSite: "Strict",
+    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
   };
+
+  if (process.env.NODE_ENV === "production") {
+    flags.domain = req.hostname;
+  }
+
+  return flags;
 };
+
 
 const setJwtCookie = (req, res, user) => {
   const payload = { id: user.id, csrfToken: randomUUID() };

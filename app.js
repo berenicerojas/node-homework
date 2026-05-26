@@ -4,6 +4,7 @@ const userRouter = require("./routers/userRoutes");
 const taskRouter = require("./routers/taskRoutes");
 const analyticsRouter = require("./routers/analyticsRoutes");
 
+const cors = require("cors");
 const app = express();
 
 app.set("trust proxy", 1);
@@ -17,6 +18,13 @@ app.use(
 
 const helmet = require("helmet");
 app.use(helmet());
+
+app.use(cors({ 
+  origin: ['http://localhost:3001'], 
+  credentials: true, 
+  methods: 'GET,POST,PATCH,DELETE', 
+  allowedHeaders: 'CONTENT-TYPE, X-CSRF-TOKEN' 
+}));
 
 const cookieParser = require("cookie-parser");
 app.use(cookieParser());
