@@ -7,17 +7,24 @@ const taskSchema = Joi.object({
   priority: Joi.string().valid("low", "medium", "high").default("medium"),
 });
 
+const getUserId = (req) => {
+  if (req.user && req.user.id) return req.user.id;
+  if (global.user_id) return global.user_id;
+  return null;
+};
+
 exports.index = async (req, res, next) => {
   try {
+    const currentUserId = getUserId(req);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const whereClause = { userId: req.user.id };
+    const whereClause = { userId: currentUserId };
     if (req.query.find) {
       whereClause.title = {
         contains: req.query.find,
-        mode: "insensitive", 
+        mode: "insensitive",
       };
     }
 
@@ -42,7 +49,7 @@ exports.index = async (req, res, next) => {
     });
 
     const tasks = dbTasks.map(task => {
-      const { user, userId, ...rest } = task; 
+      const { user, ...rest } = task;
       return { ...rest, User: user };
     });
 
@@ -60,12 +67,13 @@ exports.index = async (req, res, next) => {
 
     res.status(200).json({ tasks, pagination });
   } catch (err) {
-    if (typeof next === "function") return next(err);
+    next(err);
   }
 };
 
 exports.bulkCreate = async (req, res, next) => {
   try {
+    const currentUserId = getUserId(req);
     const { tasks } = req.body;
 
     if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
@@ -80,9 +88,9 @@ exports.bulkCreate = async (req, res, next) => {
       }
       validTasks.push({
         title: value.title,
-        isCompleted: value.isCompleted ?? false,
+        isCompleted: value.isCompleted || false,
         priority: value.priority || "medium",
-        userId: req.user.id,
+        userId: currentUserId,
       });
     }
 
@@ -97,16 +105,17 @@ exports.bulkCreate = async (req, res, next) => {
       totalRequested: validTasks.length,
     });
   } catch (err) {
-    if (typeof next === "function") return next(err);
+    next(err);
   }
 };
 
 exports.show = async (req, res, next) => {
   try {
+    const currentUserId = getUserId(req);
     const task = await prisma.task.findFirst({
       where: {
         id: parseInt(req.params.id),
-        userId: req.user.id,
+        userId: currentUserId,
       },
       include: {
         user: {
@@ -119,35 +128,36 @@ exports.show = async (req, res, next) => {
       return res.status(404).json({ message: "The task was not found." });
     }
 
-    const { user, userId, ...rest } = task; 
+    const { user, ...rest } = task;
     res.status(200).json({ ...rest, User: user });
   } catch (err) {
-    if (typeof next === "function") return next(err);
+    next(err);
   }
 };
 
 exports.create = async (req, res, next) => {
   try {
+    const currentUserId = getUserId(req);
     const { error, value } = taskSchema.validate(req.body);
     if (error) return res.status(400).json({ error: error.details[0].message });
 
     const task = await prisma.task.create({
       data: {
         title: value.title,
-        isCompleted: value.isCompleted ?? false, 
+        isCompleted: value.isCompleted,
         priority: value.priority,
-        userId: req.user.id,
+        userId: currentUserId,
       },
-      select: { id: true, title: true, isCompleted: true, priority: true },
     });
     res.status(201).json(task);
   } catch (err) {
-    if (typeof next === "function") return next(err);
+    next(err);
   }
 };
 
 exports.update = async (req, res, next) => {
   try {
+    const currentUserId = getUserId(req);
     const updateSchema = taskSchema.fork(Object.keys(taskSchema.describe().keys), (schema) => schema.optional());
     
     const { error, value } = updateSchema.validate(req.body, { allowUnknown: true });
@@ -156,7 +166,7 @@ exports.update = async (req, res, next) => {
     const existingTask = await prisma.task.findFirst({
       where: {
         id: parseInt(req.params.id),
-        userId: req.user.id,
+        userId: currentUserId,
       }
     });
 
@@ -172,19 +182,20 @@ exports.update = async (req, res, next) => {
       },
     });
 
-    const { user, userId, ...rest } = task;
+    const { user, ...rest } = task;
     res.status(200).json({ ...rest, User: user });
   } catch (err) {
-    if (typeof next === "function") return next(err);
+    next(err);
   }
 };
 
 exports.deleteTask = async (req, res, next) => {
   try {
+    const currentUserId = getUserId(req);
     const existingTask = await prisma.task.findFirst({
       where: {
         id: parseInt(req.params.id),
-        userId: req.user.id,
+        userId: currentUserId,
       }
     });
 
@@ -198,6 +209,6 @@ exports.deleteTask = async (req, res, next) => {
     
     res.status(200).json({ message: "The task has been deleted." }); 
   } catch (err) {
-    if (typeof next === "function") return next(err);
+    next(err);
   }
 };

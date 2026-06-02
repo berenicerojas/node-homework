@@ -1,12 +1,19 @@
 const prisma = require("../db/prisma");
 
+const getUserId = (req) => {
+  if (req.user && req.user.id) return req.user.id;
+  if (global.user_id) return global.user_id;
+  return null;
+};
+
 exports.getUserAnalytics = async (req, res, next) => {
   try {
-  
-    const userId = req.user.id;
+    const userId = getUserId(req);
+
+    const targetedUserId = req.params.id ? parseInt(req.params.id) : userId;
 
     const userExists = await prisma.user.findUnique({
-      where: { id: userId }
+      where: { id: targetedUserId }
     });
 
     if (!userExists) {
@@ -18,12 +25,12 @@ exports.getUserAnalytics = async (req, res, next) => {
 
     const taskStats = await prisma.task.groupBy({
       by: ['isCompleted'],
-      where: { userId: userId },
+      where: { userId: targetedUserId },
       _count: { id: true }
     });
 
     const recentTasks = await prisma.task.findMany({
-      where: { userId: userId },
+      where: { userId: targetedUserId },
       orderBy: { createdAt: 'desc' },
       take: 3
     });
@@ -31,7 +38,7 @@ exports.getUserAnalytics = async (req, res, next) => {
     const weeklyTasksGrouped = await prisma.task.groupBy({
       by: ['createdAt'],
       where: {
-        userId: userId,
+        userId: targetedUserId,
         createdAt: {
           gte: oneWeekAgo
         }
@@ -109,7 +116,7 @@ exports.searchTasks = async (req, res, next) => {
       return res.status(400).json({ error: "Search query must be at least 3 characters long" });
     }
 
-    const userId = req.user.id;
+    const userId = getUserId(req);
     let results;
 
     try {
