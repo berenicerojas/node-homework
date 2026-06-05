@@ -8,9 +8,10 @@ const taskSchema = Joi.object({
 });
 
 const getUserId = (req) => {
-  if (req.user && req.user.id) return req.user.id;
-  if (global.user_id) return global.user_id;
-  return null;
+  if (!req.user || !req.user.id) {
+    throw new TypeError("User id is required");
+  }
+  return req.user.id;
 };
 
 exports.index = async (req, res, next) => {
@@ -49,9 +50,10 @@ exports.index = async (req, res, next) => {
     });
 
     const tasks = dbTasks.map(task => {
-      const { user, ...rest } = task;
-      return { ...rest, User: user };
+      const { user, userId, ...rest } = task; 
+      return { ...rest, User: user };          
     });
+
 
     const totalTasks = await prisma.task.count({ where: whereClause });
     const pages = Math.ceil(totalTasks / limit);
@@ -144,13 +146,16 @@ exports.create = async (req, res, next) => {
     const task = await prisma.task.create({
       data: {
         title: value.title,
-        isCompleted: value.isCompleted,
         priority: value.priority,
-        userId: currentUserId,
+        isCompleted: value.isCompleted,
+        userId: currentUserId, 
       },
+      select: { id: true, title: true, isCompleted: true, priority: true },
     });
-    res.status(201).json(task);
-  } catch (err) {
+
+    const { userId: omittedUserId, ...taskWithoutUserId } = task;
+    res.status(201).json(taskWithoutUserId);
+  } catch (err) { 
     next(err);
   }
 };
