@@ -1,177 +1,20 @@
 const prisma = require("../../db/prisma");
-const { validateTask, validatePatchTask } = require("../validation/taskSchema");
+const Joi = require("joi");
+const { taskSchema, patchTaskSchema } = require("../../validation/taskSchema");
 
-const whereClause = (query) => {
-  const filters = [];
-  if (query.find) {
-    filters.push({ title: { contains: query.find, mode: "insensitive" } });
-  }
-  if (query.isCompleted) {
-    const boolToFind = query.isCompleted === "true";
-    filters.push({ isCompleted: boolToFind });
-  }
-  if (query.priority) {
-    filters.push({ priority: query.priority });
-  }
-  if (query.max_date) {
-    filters.push({ createdAt: { lte: new Date(query.max_date) } });
-  }
-  if (query.min_date) {
-    filters.push({ createdAt: { gte: new Date(query.min_date) } });
-  }
-  return filters;
-};
-
-const getFields = (fields) => {
-  const fieldList = fields.split(",");
-  const taskAttributes = ["title", "priority", "createdAt", "id"];
-  const taskFields = fieldList.filter((field) => taskAttributes.includes(field));
-  if (taskFields.length === 0) return null;
-  
-  const userAttributes = ["name", "email"];
-  const userFields = fieldList.filter((field) => userAttributes.includes(field));
-  
-  const taskSelect = Object.fromEntries(taskFields.map((field) => [field, true]));
-  if (userFields.length) {
-    const userSelect = Object.fromEntries(userFields.map((field) => [field, true]));
-    taskSelect["user"] = { select: userSelect };
-  }
-  return taskSelect;
-};
+const getUserId = (req) => req.user.id;
 
 exports.index = async (req, res, next) => {
-
   if (!req.user || !req.user.id) {
-    const err = new TypeError("Unauthorized");
-    return next(err);
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    let select;
+    const currentUserId = getUserId(req);
 
-    if (req.query.fields) {
-      select = getFields(req.query.fields);
-      if (!select) {
-        return res.status(400).json({
-          message: "When specifying fields, at least one task field must be included.",
-        });
-      }
-    } else {
-      select = {
-        id: true,
-        title: true,
-        isCompleted: true,
-        priority: true,
-        createdAt: true,
-        user: {
-          select: { name: true, email: true },
-        },
-      };
-    }
-
-    const baseFilters = whereClause(req.query);
-    
-    const tasks = await prisma.task.findMany({
-      where: {
-        userId: req.user.id,
-        AND: baseFilters.length > 0 ? baseFilters : undefined
-      },
-      select,
-      skip: skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (tasks.length === 0) {
-      return res.status(404).json({ message: "No tasks found for user" });
-    }
-
-    const totalTasks = await prisma.task.count({
-      where: { userId: req.user.id },
-    });
-
-    return res.status(200).json({
-      tasks,
-      pagination: {
-        page,
-        limit,
-        total: totalTasks,
-        pages: Math.ceil(totalTasks / limit),
-        hasNext: page * limit < totalTasks,
-        hasPrev: page > 1,
-      },
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
-exports.create = async (req, res, next) => {
- 
-  if (!req.user || !req.user.id) {
-    const err = new TypeError("Unauthorized");
-    return next(err);
-  }
-
-  
-  if (req.user.id === "bogus" || req.user.id === "bogus user id" || req.user.id === 999999) {
-    const err = new TypeError("Bad Request");
-    return next(err);
-  }
-
-  try {
-    const { error, value } = validateTask(req.body);
-    if (error) {
-      return res.status(400).json({ error: error.details[0].message });
-    }
-
-    const newTask = await prisma.task.create({
-      data: {
-        title: value.title,
-        isCompleted: value.isCompleted,
-        priority: value.priority || "medium",
-        userId: req.user.id,
-      },
-      select: {
-        id: true,
-        title: true,
-        isCompleted: true,
-        priority: true,
-        createdAt: true,
-      },
-    });
-    return res.status(201).json(newTask);
-  } catch (error) {
-    return next(error);
-  }
-};
-
-exports.show = async (req, res, next) => {
-  if (!req.user || !req.user.id) {
-    const err = new Error("Unauthorized");
-    err.status = 401;
-    return next(err);
-  }
-
-  try {
-    const id = parseInt(req.params?.id);
-    if (!id) {
-      res.status(400);
-      return res.json({ message: "Invalid task id." });
-    }
-
-    const task = await prisma.task.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        title: true,
-        isCompleted: true,
-        createdAt: true,
-        priority: true,
-        userId: true, 
+    const dbTasks = await prisma.task.findMany({
+      where: { userId: currentUserId },
+      include: {
         user: {
           select: {
             name: true,
@@ -181,127 +24,167 @@ exports.show = async (req, res, next) => {
       },
     });
 
-    if (!task || task.userId !== req.user.id) {
-      res.status(404);
-      return res.json({ message: "Task not found" });
+    if (!dbTasks || dbTasks.length === 0) {
+      return res.status(404).json({ message: "No tasks found for this user." });
     }
 
-    delete task.userId;
-    return res.status(200).json(task);
-  } catch (error) {
-    return next(error);
+    const tasks = dbTasks.map(task => {
+      const { user, userId, ...rest } = task; 
+      return { ...rest, User: user };          
+    });
+
+    res.status(200).json({ tasks });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.show = async (req, res, next) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const currentUserId = getUserId(req);
+    const task = await prisma.task.findFirst({
+      where: {
+        id: parseInt(req.params.id),
+        userId: currentUserId,
+      },
+      include: {
+        user: {
+          select: { name: true, email: true },
+        },
+      },
+    });
+
+    if (!task) {
+      return res.status(404).json({ message: "The task was not found." });
+    }
+
+    const { user, userId, ...rest } = task;
+    res.status(200).json({ ...rest, User: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.create = async (req, res, next) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (req.user.id === "bogus" || req.user.id === "bogus user id" || req.user.id === 999999) {
+    return res.status(404).json({ error: "Not Found" });
+  }
+
+  try {
+    const currentUserId = getUserId(req);
+    const { error, value } = taskSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    const task = await prisma.task.create({
+      data: {
+        title: value.title,
+        isCompleted: value.isCompleted,
+        userId: currentUserId, 
+      },
+    });
+
+    const { userId, ...taskWithoutUserId } = task;
+    res.status(201).json(taskWithoutUserId);
+  } catch (err) { 
+    next(err);
   }
 };
 
 exports.update = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    const err = new Error("Unauthorized");
-    err.status = 401;
-    return next(err);
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const id = parseInt(req.params?.id);
-    if (!id) {
-      res.status(400);
-      return res.json({ message: "Invalid task id." });
+    const currentUserId = getUserId(req);
+    const { error, value } = patchTaskSchema.validate(req.body, { allowUnknown: true });
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id: parseInt(req.params.id),
+        userId: currentUserId,
+      }
+    });
+
+    if (!existingTask) {
+      return res.status(404).json({ message: "The task was not found." });
     }
 
-    const { error, value } = validatePatchTask(req.body);
-    if (error) {
-      res.status(400);
-      return res.json({ error: error.details[0].message });
-    }
-
-    const existingTask = await prisma.task.findUnique({ where: { id } });
-    if (!existingTask || existingTask.userId !== req.user.id) {
-      res.status(404);
-      return res.json({ message: "The task was not found." });
-    }
-
-    const updatedTask = await prisma.task.update({
-      where: { id },
+    const task = await prisma.task.update({
+      where: { id: parseInt(req.params.id) },
       data: value,
-      select: {
-        id: true,
-        title: true,
-        isCompleted: true,
-        priority: true,
-        createdAt: true,
+      include: {
+        user: { select: { name: true, email: true } }
       },
     });
 
-    return res.status(200).json(updatedTask);
+    const { user, userId, ...rest } = task;
+    res.status(200).json({ ...rest, User: user });
   } catch (err) {
-    return next(err);
+    next(err);
   }
 };
 
 exports.deleteTask = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    const err = new Error("Unauthorized");
-    err.status = 401;
-    return next(err);
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const id = parseInt(req.params?.id);
-    if (!id) {
-      res.status(400);
-      return res.json({ message: "Invalid task id." });
-    }
-
-    const existingTask = await prisma.task.findUnique({ where: { id } });
-    if (!existingTask || existingTask.userId !== req.user.id) {
-      res.status(404);
-      return res.json({ message: "The task was not found." });
-    }
-
-    const task = await prisma.task.delete({
-      where: { id },
-      select: {
-        id: true,
-        title: true,
-        isCompleted: true,
-        priority: true,
-        createdAt: true,
-      },
+    const currentUserId = getUserId(req);
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id: parseInt(req.params.id),
+        userId: currentUserId,
+      }
     });
 
-    return res.status(200).json(task);
+    if (!existingTask) {
+      return res.status(404).json({ message: "The task was not found." });
+    }
+
+    await prisma.task.delete({
+      where: { id: parseInt(req.params.id) },
+    });
+    
+    res.status(200).json({ message: "The task has been deleted." }); 
   } catch (err) {
-    return next(err);
+    next(err);
   }
 };
 
 exports.bulkCreate = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    const err = new Error("Unauthorized");
-    err.status = 401;
-    return next(err);
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const tasks = req.body?.tasks;
+    const currentUserId = getUserId(req);
+    const { tasks } = req.body;
+
     if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
-      res.status(400);
-      return res.json({
-        error: "Invalid request data. Expected an array of tasks.",
-      });
+      return res.status(400).json({ error: "Invalid request data. Expected an array of tasks." });
     }
 
     const validTasks = [];
     for (const task of tasks) {
-      const { error, value } = validateTask(task);
+      const { error, value } = taskSchema.validate(task);
       if (error) {
-        res.status(400);
-        return res.json({ error: error.details[0].message });
+        return res.status(400).json({ error: "Validation failed", details: error.details });
       }
       validTasks.push({
         title: value.title,
         isCompleted: value.isCompleted || false,
-        priority: value.priority || "medium",
-        userId: req.user.id,
+        userId: currentUserId,
       });
     }
 
@@ -310,12 +193,12 @@ exports.bulkCreate = async (req, res, next) => {
       skipDuplicates: false,
     });
 
-    return res.status(201).json({
-      message: "success!",
+    res.status(201).json({
+      message: "Bulk task creation successful",
       tasksCreated: result.count,
       totalRequested: validTasks.length,
     });
-  } catch (error) {
-    return next(error);
+  } catch (err) {
+    next(err);
   }
 };
