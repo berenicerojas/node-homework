@@ -1,11 +1,19 @@
 const prisma = require("../db/prisma");
 
+const getUserId = (req) => {
+  if (req.user && req.user.id) return req.user.id;
+  if (global.user_id) return global.user_id;
+  return null;
+};
+
 exports.getUserAnalytics = async (req, res, next) => {
   try {
-    const userId = parseInt(req.params.id) || global.user_id;
+    const userId = getUserId(req);
+
+    const targetedUserId = req.params.id ? parseInt(req.params.id) : userId;
 
     const userExists = await prisma.user.findUnique({
-      where: { id: userId }
+      where: { id: targetedUserId }
     });
 
     if (!userExists) {
@@ -17,12 +25,12 @@ exports.getUserAnalytics = async (req, res, next) => {
 
     const taskStats = await prisma.task.groupBy({
       by: ['isCompleted'],
-      where: { userId: userId },
+      where: { userId: targetedUserId },
       _count: { id: true }
     });
 
     const recentTasks = await prisma.task.findMany({
-      where: { userId: userId },
+      where: { userId: targetedUserId },
       orderBy: { createdAt: 'desc' },
       take: 3
     });
@@ -30,7 +38,7 @@ exports.getUserAnalytics = async (req, res, next) => {
     const weeklyTasksGrouped = await prisma.task.groupBy({
       by: ['createdAt'],
       where: {
-        userId: userId,
+        userId: targetedUserId,
         createdAt: {
           gte: oneWeekAgo
         }
@@ -108,20 +116,22 @@ exports.searchTasks = async (req, res, next) => {
       return res.status(400).json({ error: "Search query must be at least 3 characters long" });
     }
 
+    const userId = getUserId(req);
     let results;
+
     try {
       results = await prisma.$queryRawUnsafe(
         `SELECT t.id, t.title, t.priority, t."isCompleted", u.name AS user_name 
          FROM "Task" t 
          INNER JOIN "User" u ON t."userId" = u.id 
          WHERE t."userId" = $1 AND t.title ILIKE $2`,
-        global.user_id,
+        userId,
         `%${q}%`
       );
     } catch (sqlError) {
       const fallbackData = await prisma.task.findMany({
         where: {
-          userId: global.user_id,
+          userId: userId,
           title: { contains: q, mode: 'insensitive' }
         },
         include: {

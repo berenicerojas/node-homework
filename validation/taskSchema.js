@@ -3,12 +3,12 @@ const Joi = require("joi");
 const taskSchema = Joi.object({
   title: Joi.string().required(),
   isCompleted: Joi.boolean().default(false),
-  priority: Joi.string().valid("low", "medium", "high").default("medium") 
 });
 
 const patchTaskSchema = Joi.object({
-  title: Joi.string().trim().min(3).max(30).not(null),
-  isCompleted: Joi.boolean().not(null),
-}).min(1).message("No attributes to change were specified.");
+  title: Joi.string().optional(), 
+  isCompleted: Joi.boolean().optional(),
+  priority: Joi.number().optional()
+});
 
 module.exports = { taskSchema, patchTaskSchema };

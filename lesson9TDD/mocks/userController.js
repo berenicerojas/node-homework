@@ -5,20 +5,18 @@ const jwt = require("jsonwebtoken");
 
 const cookieFlags = (req) => {
   return {
-    ...(process.env.NODE_ENV === "production" && { domain: req.hostname }), // add domain into cookie for production only
-    // httpOnly: true, bug
+    ...(process.env.NODE_ENV === "production" && { domain: req.hostname }), 
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
   };
 };
 
 const setJwtCookie = (req, res, user) => {
-  // Sign JWT
+
   const payload = { id: user.id, csrfToken: randomUUID() };
-  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" }); // 1 hour expiration
-  // Set cookie.  Note that the cookie flags have to be different in production and in test.
-  res.cookie("jwt", token, { ...cookieFlags(req), maxAge: 3600000 }); // 1 hour expiration
-  return payload.csrfToken; // this is needed in the body returned by logon() or register()
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" }); 
+  res.cookie("jwt", token, { ...cookieFlags(req), maxAge: 3600000 }); 
+  return payload.csrfToken; 
 };
 
 const crypto = require("crypto");
@@ -44,21 +42,16 @@ exports.register = async (req, res, next) => {
 
   const { email, name, password } = value;
 
-  // Hash the password before storing (using scrypt from lesson 4)
   const hashedPassword = await hashPassword(password);
-  // In your register method, after validation and password hashing:
-  // Do the Joi validation, so that value contains the user entry you want.
-  // hash the password, and put it in value.hashedPassword
-  // delete value.password as that doesn't get stored
+
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // Create user account (similar to Assignment 6, but using tx instead of prisma)
+
       const newUser = await tx.user.create({
         data: { email, name, hashedPassword },
         select: { id: true, email: true, name: true },
       });
 
-      // Create 3 welcome tasks using createMany
       const welcomeTaskData = [
         {
           title: "Complete your profile",
@@ -70,7 +63,6 @@ exports.register = async (req, res, next) => {
       ];
       await tx.task.createMany({ data: welcomeTaskData });
 
-      // Fetch the created tasks to return them
       const welcomeTasks = await tx.task.findMany({
         where: {
           userId: newUser.id,
@@ -88,7 +80,6 @@ exports.register = async (req, res, next) => {
     });
     const csrfToken = setJwtCookie(req, res, result.user);
     delete result.user.id;
-    // Send response with status 201
     res.status(201).json({
       user: result.user,
       welcomeTasks: result.welcomeTasks,
@@ -98,10 +89,9 @@ exports.register = async (req, res, next) => {
     return;
   } catch (err) {
     if (err.code === "P2002") {
-      // send the appropriate error back -- the email was already registered
       return res.status(400).json({ error: "Email already registered" });
     } else {
-      return next(err); // the error handler takes care of other errors
+      return next(err); 
     }
   }
 };
@@ -113,7 +103,6 @@ exports.logon = async (req, res) => {
     return res.status(400).json({ message: "Email and password are required" });
   }
 
-  // Find user by email
   const user = await prisma.user.findUnique({
     where: { email },
   });
@@ -123,12 +112,6 @@ exports.logon = async (req, res) => {
   }
 
   const isValidPassword = await comparePassword(password, user.hashedPassword);
-
-  // if (!isValidPassword) {
-  //   return res.status(401).json({ message: "Invalid credentials" });
-  // } bug
-
-  // Store user ID globally for session management (not secure for production)
   const csrfToken = setJwtCookie(req, res, user);
 
   res.status(200).json({
@@ -139,8 +122,6 @@ exports.logon = async (req, res) => {
 };
 
 exports.logoff = async (req, res) => {
-  // Clear the global user ID for session management
-  // res.clearCookie("jwt", cookieFlags(req));
   res.sendStatus(200);
 };
 
