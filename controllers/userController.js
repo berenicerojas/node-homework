@@ -37,6 +37,7 @@ exports.register = async (req, res, next) => {
   try {
     let isPerson = false;  
 
+
     if (req.body.recaptchaToken) {    
       const token = req.body.recaptchaToken;    
       const params = new URLSearchParams();    
@@ -56,9 +57,10 @@ exports.register = async (req, res, next) => {
       const data = await response.json();    
       if (data.success) isPerson = true;    
       delete req.body.recaptchaToken;  
+     
     } else if (
-      process.env.NODE_ENV !== "production" || 
-      (process.env.RECAPTCHA_BYPASS && req.get("X-Recaptcha-Test") === process.env.RECAPTCHA_BYPASS)
+      process.env.RECAPTCHA_BYPASS && 
+      req.get("X-Recaptcha-Test") === process.env.RECAPTCHA_BYPASS
     ) {    
       isPerson = true;  
     }  
@@ -68,6 +70,7 @@ exports.register = async (req, res, next) => {
         .status(StatusCodes.BAD_REQUEST)      
         .json({ message: "Bot verification failed. Please complete the reCAPTCHA." });  
     }
+
 
     const { error, value } = userSchema.validate(req.body);
     if (error) return res.status(StatusCodes.BAD_REQUEST).json({ error: error.details[0].message });
