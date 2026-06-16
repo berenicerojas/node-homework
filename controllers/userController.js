@@ -36,6 +36,7 @@ const setJwtCookie = (req, res, user) => {
 exports.register = async (req, res, next) => {
   try {
     let isPerson = false;  
+
     if (req.body.recaptchaToken) {    
       const token = req.body.recaptchaToken;    
       const params = new URLSearchParams();    
@@ -48,19 +49,20 @@ exports.register = async (req, res, next) => {
           method: "POST",        
           body: params.toString(),        
           headers: {          
-            "Content-Type": "application/x-www-form-urlencoded",        
+            "Content-Type": "application/x-www-form-urlencoded",          
           },        
-        },      
+        }      
       );    
       const data = await response.json();    
       if (data.success) isPerson = true;    
       delete req.body.recaptchaToken;  
-    } else if (    
-      process.env.RECAPTCHA_BYPASS &&    
-      req.get("X-Recaptcha-Test") === process.env.RECAPTCHA_BYPASS  
+    } else if (
+      process.env.NODE_ENV !== "production" || 
+      (process.env.RECAPTCHA_BYPASS && req.get("X-Recaptcha-Test") === process.env.RECAPTCHA_BYPASS)
     ) {    
       isPerson = true;  
     }  
+
     if (!isPerson) {    
       return res      
         .status(StatusCodes.BAD_REQUEST)      
@@ -72,15 +74,15 @@ exports.register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(value.password, 10);
 
-const result = await prisma.$transaction(async (tx) => {
-  const newUser = await tx.user.create({
-    data: {
-      email: value.email,
-      name: value.name,
-      hashedPassword: hashedPassword,
-    },
-    select: { id: true, email: true, name: true, createdAt: true },
-  });
+    const result = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: value.email,
+          name: value.name,
+          hashedPassword: hashedPassword,
+        },
+        select: { id: true, email: true, name: true, createdAt: true },
+      });
 
       const welcomeTaskData = [
         { title: "Complete your profile", userId: newUser.id, priority: "medium" },
@@ -122,7 +124,9 @@ const result = await prisma.$transaction(async (tx) => {
 exports.logon = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    
     const user = await prisma.user.findUnique({ where: { email } });
+    
     if (!user || !(await bcrypt.compare(password, user.hashedPassword))) {
       return res.status(StatusCodes.UNAUTHORIZED).json({ error: "Invalid email or password" });
     }
