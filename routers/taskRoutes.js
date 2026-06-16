@@ -12,4 +12,6 @@ router.get("/:id", taskController.show);
 router.patch("/:id", taskController.update);      
 router.delete("/:id", taskController.deleteTask);
 
+router.delete("/bulk", taskController.bulkDeleteTasks);
+
 module.exports = router;
