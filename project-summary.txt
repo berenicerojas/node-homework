@@ -1,1 +1,10 @@
 https://node-homework-berns.onrender.com
+
+==================================================
+ASSIGNMENT 11 ENHANCEMENT: Bulk Delete Tasks
+==================================================
+I implemented the Bulk Delete feature (Section 11.3.7).
+- Route Path: /api/tasks/bulk
+- Method: DELETE
+- Body format required: { "taskIds": ["your-task-uuid-here"] }
+This deletes multiple tasks simultaneously using Prisma's deleteMany, securely scoped to the logged-in user.

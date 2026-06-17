@@ -217,3 +217,21 @@ exports.bulkCreate = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.bulkDeleteTasks = async (req, res, next) => {
+  try {
+    const { taskIds } = req.body;
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: "You must provide an array of task IDs to delete." });
+    }
+    const deleteSummary = await prisma.task.deleteMany({
+      where: {
+        id: { in: taskIds },
+        userId: req.user.id
+      }
+    });
+    res.status(200).json({ message: "Successfully deleted selected tasks.", count: deleteSummary.count });
+  } catch (err) {
+    next(err);
+  }
+};

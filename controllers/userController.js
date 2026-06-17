@@ -37,7 +37,6 @@ exports.register = async (req, res, next) => {
   try {
     let isPerson = false;  
 
-
     if (req.body.recaptchaToken) {    
       const token = req.body.recaptchaToken;    
       const params = new URLSearchParams();    
@@ -57,7 +56,7 @@ exports.register = async (req, res, next) => {
       const data = await response.json();    
       if (data.success) isPerson = true;    
       delete req.body.recaptchaToken;  
-     
+      
     } else if (
       process.env.RECAPTCHA_BYPASS && 
       req.get("X-Recaptcha-Test") === process.env.RECAPTCHA_BYPASS
@@ -70,7 +69,6 @@ exports.register = async (req, res, next) => {
         .status(StatusCodes.BAD_REQUEST)      
         .json({ message: "Bot verification failed. Please complete the reCAPTCHA." });  
     }
-
 
     const { error, value } = userSchema.validate(req.body);
     if (error) return res.status(StatusCodes.BAD_REQUEST).json({ error: error.details[0].message });
@@ -127,15 +125,11 @@ exports.register = async (req, res, next) => {
 exports.logon = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    
     const user = await prisma.user.findUnique({ where: { email } });
-    
     if (!user || !(await bcrypt.compare(password, user.hashedPassword))) {
       return res.status(StatusCodes.UNAUTHORIZED).json({ error: "Invalid email or password" });
     }
-
     const csrfToken = setJwtCookie(req, res, user);
-
     res.status(StatusCodes.OK).json({ 
       name: user.name, 
       email: user.email,
