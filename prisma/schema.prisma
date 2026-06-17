@@ -12,8 +12,8 @@ model User {
   email          String   @unique
   name           String
   hashedPassword String
-  createdAt      DateTime @default(now())
   tasks          Task[]
+  createdAt      DateTime @default(now())
 
   @@map("users") 
 }

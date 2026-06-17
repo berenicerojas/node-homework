@@ -6,7 +6,9 @@ const getUserId = (req) => req.user.id;
 
 exports.index = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    return res.status(401).json({ error: "Unauthorized" });
+    const err = new TypeError("Unauthorized");
+    err.status = 401;
+    return next(err);
   }
 
   try {
@@ -14,6 +16,7 @@ exports.index = async (req, res, next) => {
 
     const dbTasks = await prisma.task.findMany({
       where: { userId: currentUserId },
+      orderBy: { id: "desc" }, 
       include: {
         user: {
           select: {
@@ -41,7 +44,9 @@ exports.index = async (req, res, next) => {
 
 exports.show = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    return res.status(401).json({ error: "Unauthorized" });
+    const err = new TypeError("Unauthorized");
+    err.status = 401;
+    return next(err);
   }
 
   try {
@@ -71,11 +76,15 @@ exports.show = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    return res.status(401).json({ error: "Unauthorized" });
+    const err = new TypeError("Unauthorized");
+    err.status = 401;
+    return next(err);
   }
 
   if (req.user.id === "bogus" || req.user.id === "bogus user id" || req.user.id === 999999) {
-    return res.status(404).json({ error: "Not Found" });
+    const err = new TypeError("Bad Request");
+    err.status = 400;
+    return next(err);
   }
 
   try {
@@ -100,7 +109,9 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    return res.status(401).json({ error: "Unauthorized" });
+    const err = new TypeError("Unauthorized");
+    err.status = 401;
+    return next(err);
   }
 
   try {
@@ -136,7 +147,9 @@ exports.update = async (req, res, next) => {
 
 exports.deleteTask = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    return res.status(401).json({ error: "Unauthorized" });
+    const err = new TypeError("Unauthorized");
+    err.status = 401;
+    return next(err);
   }
 
   try {
@@ -164,7 +177,9 @@ exports.deleteTask = async (req, res, next) => {
 
 exports.bulkCreate = async (req, res, next) => {
   if (!req.user || !req.user.id) {
-    return res.status(401).json({ error: "Unauthorized" });
+    const err = new TypeError("Unauthorized");
+    err.status = 401;
+    return next(err);
   }
 
   try {
